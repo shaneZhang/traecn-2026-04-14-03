@@ -1,0 +1,13 @@
+2026-04-15 12:08:05 - salary_analysis - INFO - 创建年龄分组: 使用列 'age'
+2026-04-15 12:08:05 - salary_analysis - INFO - 创建薪资分组: 使用列 'pre_tax_salary'
+2026-04-15 12:08:05 - salary_analysis - INFO - 删除缺失值: 删除了 2 条记录
+2026-04-15 12:08:05 - salary_analysis - INFO - 删除重复数据: 删除了 1 条记录
+2026-04-15 12:08:33 - salary_analysis - INFO - 创建年龄分组: 使用列 'age'
+2026-04-15 12:08:33 - salary_analysis - INFO - 创建薪资分组: 使用列 'pre_tax_salary'
+2026-04-15 12:08:33 - salary_analysis - INFO - 删除缺失值: 删除了 2 条记录
+2026-04-15 12:08:33 - salary_analysis - INFO - 删除重复数据: 删除了 1 条记录
+2026-04-15 12:12:37 - salary_analysis - INFO - 应用启动
+2026-04-15 12:12:44 - salary_analysis - INFO - 自动映射字段: {'姓名': 'name', '性别': 'gender', '年龄': 'age', '学历': 'education', '工作年限': 'work_years', '所在行业': 'industry', '岗位类型': 'position_type', '职级': 'level', '基本工资': 'base_salary', '绩效奖金': 'performance_bonus', '补贴总和': 'allowance', '税前薪资': 'pre_tax_salary', '税后薪资': 'post_tax_salary', '所属企业规模': 'company_size', '入职年份': 'join_year'}
+2026-04-15 12:12:44 - salary_analysis - INFO - 成功加载Excel文件: /Users/zhangyuqing/Desktop/traecn-2026-04-14-03/sample_data/薪资数据样本.xlsx, 记录数: 500
+2026-04-15 12:12:44 - salary_analysis - INFO - 成功加载数据，共 500 条记录
+2026-04-15 12:24:18 - salary_analysis - INFO - 应用关闭
