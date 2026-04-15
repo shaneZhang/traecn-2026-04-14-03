@@ -1,36 +1,81 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import pandas as pd
+from tkinter import ttk, messagebox
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.data_loader import DataLoader
-from src.data_processor import DataProcessor
-from src.data_analyzer import DataAnalyzer
-from src.visualizer import DataVisualizer
+from src.models import DataManager, ConfigManager, get_logger
+from src.controllers import DataController, AnalysisController, VisualizationController
+from src.ui import UIComponentFactory
 
 
-class SalaryAnalysisApp:
-    def __init__(self, root):
+class MainWindow:
+    def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title('园区白领薪资数据分析工具')
-        self.root.geometry('1400x800')
+        self.logger = get_logger('MainWindow')
         
-        self.data_loader = DataLoader()
-        self.data_processor = DataProcessor()
-        self.data_analyzer = DataAnalyzer()
-        self.visualizer = DataVisualizer()
+        self.config = ConfigManager()
+        self.data_manager = DataManager()
         
-        self.current_data = None
-        self.setup_ui()
+        self._setup_controllers()
+        self._setup_ui()
+        self._setup_data_observer()
     
-    def setup_ui(self):
+    def _setup_controllers(self) -> None:
+        self.data_controller = DataController(self.data_manager, self.config)
+        self.analysis_controller = AnalysisController(self.data_manager, self.config)
+        self.visualization_controller = VisualizationController(self.data_manager, self.config)
+        
+        self.data_controller.set_root(self.root)
+        self.data_controller.set_status_callback(self._update_status)
+        self.data_controller.set_info_callback(self._update_info_panel)
+    
+    def _setup_ui(self) -> None:
+        window_config = self.config.get_window_config()
+        self.root.title(window_config.get('title', '园区白领薪资数据分析工具'))
+        self.root.geometry(f"{window_config.get('width', 1400)}x{window_config.get('height', 800)}")
         self.root.configure(bg='#f5f5f5')
         
-        self.create_menu()
+        UIComponentFactory.configure_styles()
         
+        self._create_menu()
+        self._create_main_layout()
+        self._create_status_bar()
+    
+    def _create_menu(self) -> None:
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='文件', menu=file_menu)
+        file_menu.add_command(label='打开Excel文件', command=self._on_load_file)
+        file_menu.add_command(label='打开文件夹', command=self._on_load_folder)
+        file_menu.add_separator()
+        file_menu.add_command(label='导出数据', command=self._on_export_data)
+        file_menu.add_command(label='导出图表', command=self._on_export_chart)
+        file_menu.add_separator()
+        file_menu.add_command(label='退出', command=self.root.quit)
+        
+        data_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='数据处理', menu=data_menu)
+        data_menu.add_command(label='数据清洗', command=self._show_clean_dialog)
+        data_menu.add_command(label='数据分组', command=self._show_group_dialog)
+        data_menu.add_command(label='重置数据', command=self._on_reset_data)
+        
+        analysis_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='分析', menu=analysis_menu)
+        analysis_menu.add_command(label='描述性统计', command=self._on_descriptive_stats)
+        analysis_menu.add_command(label='频率分析', command=self._on_frequency_analysis)
+        analysis_menu.add_command(label='交叉分析', command=self._on_crosstab)
+        analysis_menu.add_command(label='相关性分析', command=self._on_correlation)
+        
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label='帮助', menu=help_menu)
+        help_menu.add_command(label='使用说明', command=self._show_help)
+        help_menu.add_command(label='关于', command=self._show_about)
+    
+    def _create_main_layout(self) -> None:
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
@@ -38,74 +83,34 @@ class SalaryAnalysisApp:
         left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
         left_panel.pack_propagate(False)
         
-        self.create_left_panel(left_panel)
+        self._create_left_panel(left_panel)
         
         right_panel = ttk.Frame(main_frame)
         right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        self.create_right_panel(right_panel)
-        
-        self.status_bar = ttk.Label(self.root, text='就绪', relief=tk.SUNKEN, anchor=tk.W)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self._create_right_panel(right_panel)
     
-    def create_menu(self):
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
-        
-        file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='文件', menu=file_menu)
-        file_menu.add_command(label='打开Excel文件', command=self.load_file)
-        file_menu.add_command(label='打开文件夹', command=self.load_folder)
-        file_menu.add_separator()
-        file_menu.add_command(label='导出数据', command=self.export_data)
-        file_menu.add_command(label='导出图表', command=self.export_chart)
-        file_menu.add_separator()
-        file_menu.add_command(label='退出', command=self.root.quit)
-        
-        data_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='数据处理', menu=data_menu)
-        data_menu.add_command(label='数据清洗', command=self.clean_data)
-        data_menu.add_command(label='数据筛选', command=self.filter_data)
-        data_menu.add_command(label='数据分组', command=self.group_data)
-        data_menu.add_command(label='重置数据', command=self.reset_data)
-        
-        analysis_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='分析', menu=analysis_menu)
-        analysis_menu.add_command(label='描述性统计', command=self.show_descriptive_stats)
-        analysis_menu.add_command(label='频率分析', command=self.show_frequency_analysis)
-        analysis_menu.add_command(label='交叉分析', command=self.show_crosstab)
-        analysis_menu.add_command(label='相关性分析', command=self.show_correlation)
-        
-        help_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label='帮助', menu=help_menu)
-        help_menu.add_command(label='使用说明', command=self.show_help)
-        help_menu.add_command(label='关于', command=self.show_about)
-    
-    def create_left_panel(self, parent):
-        title_label = ttk.Label(parent, text='功能菜单', font=('Arial', 14, 'bold'))
+    def _create_left_panel(self, parent: ttk.Frame) -> None:
+        title_label = UIComponentFactory.create_label(parent, '功能菜单', style='Title.TLabel')
         title_label.pack(pady=(0, 20))
         
         buttons = [
-            ('📂 数据导入', self.load_file),
-            ('📊 数据概览', self.show_data_overview),
-            ('🧹 数据清洗', self.clean_data),
-            ('📈 统计分析', self.show_analysis),
-            ('📉 可视化', self.show_visualization),
-            ('📋 数据导出', self.export_data),
+            ('📂 数据导入', self._on_load_file),
+            ('📊 数据概览', self._on_data_overview),
+            ('🧹 数据清洗', self._show_clean_dialog),
+            ('📈 统计分析', self._on_analysis_tab),
+            ('📉 可视化', self._on_visualization_tab),
+            ('📋 数据导出', self._on_export_data),
         ]
         
-        for text, command in buttons:
-            btn = ttk.Button(parent, text=text, command=command, width=20)
-            btn.pack(pady=5, padx=10, fill=tk.X)
+        UIComponentFactory.create_menu_button_group(parent, buttons, pack_kwargs={'fill': tk.X})
         
-        info_frame = ttk.LabelFrame(parent, text='数据信息', padding=10)
-        info_frame.pack(fill=tk.BOTH, expand=True, pady=20, padx=10)
-        
-        self.info_text = tk.Text(info_frame, height=15, width=25, state=tk.DISABLED)
-        self.info_text.pack(fill=tk.BOTH, expand=True)
+        info_panel = UIComponentFactory.create_info_panel(parent, '数据信息', height=15)
+        self.info_text = info_panel['text']
+        info_panel['frame'].pack(fill=tk.BOTH, expand=True, pady=20, padx=10)
     
-    def create_right_panel(self, parent):
-        self.notebook = ttk.Notebook(parent)
+    def _create_right_panel(self, parent: ttk.Frame) -> None:
+        self.notebook = UIComponentFactory.create_notebook(parent)
         self.notebook.pack(fill=tk.BOTH, expand=True)
         
         self.overview_frame = ttk.Frame(self.notebook)
@@ -116,20 +121,22 @@ class SalaryAnalysisApp:
         self.notebook.add(self.analysis_frame, text='统计分析')
         self.notebook.add(self.visualization_frame, text='可视化')
         
-        self.create_overview_tab()
-        self.create_analysis_tab()
-        self.create_visualization_tab()
+        self._create_overview_tab()
+        self._create_analysis_tab()
+        self._create_visualization_tab()
     
-    def create_overview_tab(self):
+    def _create_overview_tab(self) -> None:
         control_frame = ttk.Frame(self.overview_frame)
         control_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        ttk.Button(control_frame, text='刷新', command=self.show_data_overview).pack(side=tk.LEFT, padx=5)
+        UIComponentFactory.create_button(control_frame, '刷新', self._on_data_overview).pack(side=tk.LEFT, padx=5)
         
-        self.overview_tree = ttk.Treeview(self.overview_frame, show='tree headings')
+        self.overview_tree = UIComponentFactory.create_treeview(self.overview_frame, show='tree headings')
         
-        scrollbar_y = ttk.Scrollbar(self.overview_frame, orient=tk.VERTICAL, command=self.overview_tree.yview)
-        scrollbar_x = ttk.Scrollbar(self.overview_frame, orient=tk.HORIZONTAL, command=self.overview_tree.xview)
+        scrollbar_y = UIComponentFactory.create_scrollbar(self.overview_frame, orient='vertical',
+                                                          command=self.overview_tree.yview)
+        scrollbar_x = UIComponentFactory.create_scrollbar(self.overview_frame, orient='horizontal',
+                                                          command=self.overview_tree.xview)
         
         self.overview_tree.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
         
@@ -137,159 +144,143 @@ class SalaryAnalysisApp:
         scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
         self.overview_tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     
-    def create_analysis_tab(self):
+    def _create_analysis_tab(self) -> None:
         control_frame = ttk.Frame(self.analysis_frame)
         control_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        ttk.Label(control_frame, text='分析维度:').pack(side=tk.LEFT, padx=5)
+        UIComponentFactory.create_label(control_frame, '分析维度:').pack(side=tk.LEFT, padx=5)
         
         self.dimension_var = tk.StringVar()
-        self.dimension_combo = ttk.Combobox(control_frame, textvariable=self.dimension_var, width=15)
+        self.dimension_combo = UIComponentFactory.create_combobox(control_frame, self.dimension_var, width=15)
         self.dimension_combo.pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(control_frame, text='薪资字段:').pack(side=tk.LEFT, padx=5)
+        UIComponentFactory.create_label(control_frame, '薪资字段:').pack(side=tk.LEFT, padx=5)
         
         self.salary_var = tk.StringVar(value='pre_tax_salary')
-        self.salary_combo = ttk.Combobox(control_frame, textvariable=self.salary_var, width=15)
+        self.salary_combo = UIComponentFactory.create_combobox(control_frame, self.salary_var, width=15)
         self.salary_combo.pack(side=tk.LEFT, padx=5)
         
-        ttk.Button(control_frame, text='执行分析', command=self.execute_analysis).pack(side=tk.LEFT, padx=10)
+        UIComponentFactory.create_button(control_frame, '执行分析', self._on_execute_analysis).pack(side=tk.LEFT, padx=10)
         
-        self.analysis_result_text = tk.Text(self.analysis_frame, height=30)
+        self.analysis_result_text = UIComponentFactory.create_text(self.analysis_frame, height=30)
         self.analysis_result_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     
-    def create_visualization_tab(self):
+    def _create_visualization_tab(self) -> None:
         control_frame = ttk.Frame(self.visualization_frame)
         control_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        ttk.Label(control_frame, text='图表类型:').pack(side=tk.LEFT, padx=5)
+        UIComponentFactory.create_label(control_frame, '图表类型:').pack(side=tk.LEFT, padx=5)
         
         self.chart_type_var = tk.StringVar(value='bar')
         chart_types = ['bar', 'line', 'pie', 'scatter', 'boxplot', 'histogram']
-        self.chart_type_combo = ttk.Combobox(control_frame, textvariable=self.chart_type_var, 
-                                             values=chart_types, width=12)
+        self.chart_type_combo = UIComponentFactory.create_combobox(control_frame, self.chart_type_var,
+                                                                   chart_types, width=12)
         self.chart_type_combo.pack(side=tk.LEFT, padx=5)
         
-        ttk.Label(control_frame, text='分组维度:').pack(side=tk.LEFT, padx=5)
+        UIComponentFactory.create_label(control_frame, '分组维度:').pack(side=tk.LEFT, padx=5)
         
         self.viz_dimension_var = tk.StringVar()
-        self.viz_dimension_combo = ttk.Combobox(control_frame, textvariable=self.viz_dimension_var, width=12)
+        self.viz_dimension_combo = UIComponentFactory.create_combobox(control_frame, self.viz_dimension_var, width=12)
         self.viz_dimension_combo.pack(side=tk.LEFT, padx=5)
         
-        ttk.Button(control_frame, text='生成图表', command=self.generate_chart).pack(side=tk.LEFT, padx=10)
-        ttk.Button(control_frame, text='保存图表', command=self.export_chart).pack(side=tk.LEFT, padx=5)
+        UIComponentFactory.create_button(control_frame, '生成图表', self._on_generate_chart).pack(side=tk.LEFT, padx=10)
+        UIComponentFactory.create_button(control_frame, '保存图表', self._on_export_chart).pack(side=tk.LEFT, padx=5)
         
         self.chart_frame = ttk.Frame(self.visualization_frame)
         self.chart_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     
-    def load_file(self):
-        file_path = self.data_loader.select_file()
-        if file_path:
-            self.status_bar.config(text=f'正在加载: {file_path}')
-            self.root.update()
-            
-            data = self.data_loader.load_excel(file_path)
-            
-            if data is not None:
-                self.current_data = data
-                self.data_processor.set_data(data)
-                self.data_analyzer.set_data(data)
-                self.visualizer.set_data(data)
-                
-                self.update_info_text()
-                self.update_comboboxes()
-                self.show_data_overview()
-                
-                messagebox.showinfo('成功', f'数据加载成功！\n共 {len(data)} 条记录')
-                self.status_bar.config(text='数据加载成功')
-            else:
-                self.status_bar.config(text='数据加载失败')
+    def _create_status_bar(self) -> None:
+        self.status_bar = UIComponentFactory.create_status_bar(self.root, '就绪')
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
     
-    def load_folder(self):
-        folder_path = self.data_loader.select_folder()
-        if folder_path:
-            self.status_bar.config(text=f'正在加载文件夹: {folder_path}')
-            self.root.update()
-            
-            data = self.data_loader.load_folder(folder_path)
-            
-            if data is not None:
-                self.current_data = data
-                self.data_processor.set_data(data)
-                self.data_analyzer.set_data(data)
-                self.visualizer.set_data(data)
-                
-                self.update_info_text()
-                self.update_comboboxes()
-                self.show_data_overview()
-                
-                messagebox.showinfo('成功', f'数据加载成功！\n共 {len(data)} 条记录')
-                self.status_bar.config(text='数据加载成功')
-            else:
-                self.status_bar.config(text='数据加载失败')
+    def _setup_data_observer(self) -> None:
+        self.data_manager.subscribe(self._on_data_changed)
     
-    def update_info_text(self):
+    def _on_data_changed(self, event) -> None:
+        self._update_comboboxes()
+    
+    def _update_status(self, message: str) -> None:
+        self.status_bar.config(text=message)
+        self.root.update()
+    
+    def _update_info_panel(self, info: dict) -> None:
         self.info_text.config(state=tk.NORMAL)
         self.info_text.delete('1.0', tk.END)
         
-        if self.current_data is not None:
-            info = f'记录数: {len(self.current_data)}\n'
-            info += f'字段数: {len(self.current_data.columns)}\n\n'
-            info += '字段列表:\n'
-            for col in self.current_data.columns:
-                info += f'  - {col}\n'
+        if info.get('has_data'):
+            text = f"记录数: {info['rows']}\n"
+            text += f"字段数: {info['columns']}\n\n"
+            text += '字段列表:\n'
+            for col in info['column_names']:
+                text += f'  - {col}\n'
             
-            missing = self.current_data.isnull().sum()
-            if missing.sum() > 0:
-                info += '\n缺失值:\n'
-                for col, count in missing[missing > 0].items():
-                    info += f'  - {col}: {count}\n'
+            missing = info.get('missing_values', {})
+            if missing:
+                text += '\n缺失值:\n'
+                for col, count in missing.items():
+                    if count > 0:
+                        text += f'  - {col}: {count}\n'
             
-            self.info_text.insert('1.0', info)
+            self.info_text.insert('1.0', text)
         
         self.info_text.config(state=tk.DISABLED)
     
-    def update_comboboxes(self):
-        if self.current_data is not None:
-            categorical_cols = self.current_data.select_dtypes(include=['object', 'category']).columns.tolist()
-            numeric_cols = self.current_data.select_dtypes(include=['number']).columns.tolist()
-            
-            self.dimension_combo['values'] = categorical_cols
-            self.viz_dimension_combo['values'] = categorical_cols
-            
-            salary_candidates = ['pre_tax_salary', 'post_tax_salary', 'base_salary', 'total_salary']
-            available_salary = [col for col in numeric_cols if col.lower() in [s.lower() for s in salary_candidates]]
-            if not available_salary:
-                available_salary = numeric_cols
-            
-            self.salary_combo['values'] = available_salary
-            if available_salary:
-                self.salary_var.set(available_salary[0])
+    def _update_comboboxes(self) -> None:
+        categorical_cols = self.data_manager.get_categorical_columns()
+        numeric_cols = self.data_manager.get_numeric_columns()
+        
+        self.dimension_combo['values'] = categorical_cols
+        self.viz_dimension_combo['values'] = categorical_cols
+        
+        salary_candidates = self.config.get('data.salary_fields', [])
+        available_salary = [col for col in numeric_cols if col.lower() in [s.lower() for s in salary_candidates]]
+        if not available_salary:
+            available_salary = numeric_cols
+        
+        self.salary_combo['values'] = available_salary
+        if available_salary:
+            self.salary_var.set(available_salary[0])
     
-    def show_data_overview(self):
-        if self.current_data is None:
+    def _on_load_file(self) -> None:
+        self.data_controller.select_and_load_file()
+    
+    def _on_load_folder(self) -> None:
+        self.data_controller.select_and_load_folder()
+    
+    def _on_export_data(self) -> None:
+        self.data_controller.export_data()
+    
+    def _on_export_chart(self) -> None:
+        self.visualization_controller.save_chart()
+    
+    def _on_data_overview(self) -> None:
+        if not self.data_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
+            return
+        
+        data = self.data_manager.get_data()
+        if data is None:
             return
         
         self.overview_tree.delete(*self.overview_tree.get_children())
         
-        columns = ['#'] + list(self.current_data.columns)
+        columns = ['#'] + list(data.columns)
         self.overview_tree['columns'] = columns
         self.overview_tree['show'] = 'tree headings'
         
         self.overview_tree.heading('#', text='#')
         self.overview_tree.column('#', width=50, minwidth=50)
         
-        for col in self.current_data.columns:
+        for col in data.columns:
             self.overview_tree.heading(col, text=col)
             self.overview_tree.column(col, width=120, minwidth=80)
         
-        for idx, row in self.current_data.head(100).iterrows():
+        for idx, row in data.head(100).iterrows():
             values = [str(idx)] + [str(v) for v in row.values]
             self.overview_tree.insert('', tk.END, values=values)
     
-    def clean_data(self):
-        if self.current_data is None:
+    def _show_clean_dialog(self) -> None:
+        if not self.data_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
             return
         
@@ -299,56 +290,33 @@ class SalaryAnalysisApp:
         
         ttk.Label(dialog, text='选择清洗操作:').pack(pady=10)
         
-        ttk.Button(dialog, text='删除重复数据', 
+        ttk.Button(dialog, text='删除重复数据',
                   command=lambda: self._do_clean('duplicates', dialog)).pack(fill=tk.X, padx=20, pady=5)
         
-        ttk.Button(dialog, text='删除缺失值行', 
+        ttk.Button(dialog, text='删除缺失值行',
                   command=lambda: self._do_clean('missing', dialog)).pack(fill=tk.X, padx=20, pady=5)
         
-        ttk.Button(dialog, text='填充缺失值(均值)', 
+        ttk.Button(dialog, text='填充缺失值(均值)',
                   command=lambda: self._do_clean('fill_mean', dialog)).pack(fill=tk.X, padx=20, pady=5)
         
-        ttk.Button(dialog, text='移除异常值', 
+        ttk.Button(dialog, text='移除异常值',
                   command=lambda: self._do_clean('outliers', dialog)).pack(fill=tk.X, padx=20, pady=5)
     
-    def _do_clean(self, operation, dialog):
-        if self.current_data is None:
-            return
-        
+    def _do_clean(self, operation: str, dialog: tk.Toplevel) -> None:
         if operation == 'duplicates':
-            count = self.data_processor.remove_duplicates()
-            messagebox.showinfo('完成', f'删除了 {count} 条重复记录')
-        
+            self.data_controller.clean_duplicates()
         elif operation == 'missing':
-            before = len(self.current_data)
-            self.data_processor.handle_missing_values(strategy='drop')
-            after = len(self.current_data)
-            messagebox.showinfo('完成', f'删除了 {before - after} 条含缺失值记录')
-        
+            self.data_controller.clean_missing_values('drop')
         elif operation == 'fill_mean':
-            self.data_processor.handle_missing_values(strategy='fill_mean')
-            messagebox.showinfo('完成', '已用均值填充数值型缺失值')
-        
+            self.data_controller.clean_missing_values('fill_mean')
         elif operation == 'outliers':
             salary_col = self.salary_var.get() or 'pre_tax_salary'
-            count = self.data_processor.remove_outliers(salary_col)
-            messagebox.showinfo('完成', f'移除了 {count} 条异常值记录')
+            self.data_controller.remove_outliers(salary_col)
         
-        self.current_data = self.data_processor.get_current_data()
-        self.data_analyzer.set_data(self.current_data)
-        self.visualizer.set_data(self.current_data)
-        self.update_info_text()
         dialog.destroy()
     
-    def filter_data(self):
-        if self.current_data is None:
-            messagebox.showwarning('警告', '请先加载数据')
-            return
-        
-        messagebox.showinfo('提示', '数据筛选功能开发中...\n可使用数据概览表格进行查看')
-    
-    def group_data(self):
-        if self.current_data is None:
+    def _show_group_dialog(self) -> None:
+        if not self.data_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
             return
         
@@ -358,75 +326,43 @@ class SalaryAnalysisApp:
         
         ttk.Label(dialog, text='选择分组操作:').pack(pady=10)
         
-        ttk.Button(dialog, text='年龄分组', 
+        ttk.Button(dialog, text='年龄分组',
                   command=lambda: self._do_group('age', dialog)).pack(fill=tk.X, padx=20, pady=5)
         
-        ttk.Button(dialog, text='薪资分组', 
+        ttk.Button(dialog, text='薪资分组',
                   command=lambda: self._do_group('salary', dialog)).pack(fill=tk.X, padx=20, pady=5)
         
-        ttk.Button(dialog, text='工作年限分组', 
+        ttk.Button(dialog, text='工作年限分组',
                   command=lambda: self._do_group('experience', dialog)).pack(fill=tk.X, padx=20, pady=5)
     
-    def _do_group(self, group_type, dialog):
-        if self.current_data is None:
-            return
-        
+    def _do_group(self, group_type: str, dialog: tk.Toplevel) -> None:
         if group_type == 'age':
-            if 'age' in self.current_data.columns:
-                self.data_processor.create_age_group('age')
-                messagebox.showinfo('完成', '已创建年龄分组字段: age_group')
-            else:
-                messagebox.showwarning('警告', '数据中没有年龄字段')
-        
+            self.data_controller.create_age_group()
         elif group_type == 'salary':
             salary_col = self.salary_var.get() or 'pre_tax_salary'
-            if salary_col in self.current_data.columns:
-                self.data_processor.create_salary_group(salary_col)
-                messagebox.showinfo('完成', '已创建薪资分组字段: salary_group')
-            else:
-                messagebox.showwarning('警告', '数据中没有薪资字段')
-        
+            self.data_controller.create_salary_group(salary_col)
         elif group_type == 'experience':
-            if 'work_years' in self.current_data.columns:
-                self.data_processor.create_work_experience_group('work_years')
-                messagebox.showinfo('完成', '已创建工作年限分组字段: experience_group')
-            else:
-                messagebox.showwarning('警告', '数据中没有工作年限字段')
+            self.data_controller.create_experience_group()
         
-        self.current_data = self.data_processor.get_current_data()
-        self.data_analyzer.set_data(self.current_data)
-        self.update_info_text()
         dialog.destroy()
     
-    def reset_data(self):
-        if self.current_data is not None:
-            self.data_processor.reset_data()
-            self.current_data = self.data_processor.get_current_data()
-            self.data_analyzer.set_data(self.current_data)
-            self.update_info_text()
-            messagebox.showinfo('完成', '数据已重置')
+    def _on_reset_data(self) -> None:
+        self.data_controller.reset_data()
     
-    def show_descriptive_stats(self):
-        if self.current_data is None:
+    def _on_descriptive_stats(self) -> None:
+        if not self.analysis_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
             return
         
         salary_col = self.salary_var.get() or 'pre_tax_salary'
-        stats = self.data_analyzer.get_descriptive_stats(salary_col)
-        
-        result = f'薪资字段: {salary_col}\n{"="*40}\n\n'
-        for key, value in stats.items():
-            if value is not None:
-                if isinstance(value, float):
-                    result += f'{key}: {value:,.2f}\n'
-                else:
-                    result += f'{key}: {value}\n'
+        stats = self.analysis_controller.get_descriptive_stats(salary_col)
+        result = self.analysis_controller.format_stats_result(stats, salary_col)
         
         self.analysis_result_text.delete('1.0', tk.END)
         self.analysis_result_text.insert('1.0', result)
     
-    def show_frequency_analysis(self):
-        if self.current_data is None:
+    def _on_frequency_analysis(self) -> None:
+        if not self.analysis_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
             return
         
@@ -435,16 +371,14 @@ class SalaryAnalysisApp:
             messagebox.showwarning('警告', '请选择分析维度')
             return
         
-        freq = self.data_analyzer.get_frequency_analysis(dimension)
-        
-        result = f'频率分析: {dimension}\n{"="*40}\n\n'
-        result += freq.to_string(index=False)
+        freq = self.analysis_controller.get_frequency_analysis(dimension)
+        result = self.analysis_controller.format_frequency_result(freq, dimension)
         
         self.analysis_result_text.delete('1.0', tk.END)
         self.analysis_result_text.insert('1.0', result)
     
-    def show_crosstab(self):
-        if self.current_data is None:
+    def _on_crosstab(self) -> None:
+        if not self.analysis_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
             return
         
@@ -453,56 +387,40 @@ class SalaryAnalysisApp:
             messagebox.showwarning('警告', '请选择分析维度')
             return
         
-        crosstab = self.data_analyzer.get_crosstab(dimension, 'gender' if 'gender' in self.current_data.columns else self.current_data.columns[0])
-        
-        result = f'交叉分析: {dimension}\n{"="*40}\n\n'
-        result += crosstab.to_string()
+        col_col = 'gender' if 'gender' in self.data_manager.get_column_names() else self.data_manager.get_column_names()[0]
+        crosstab = self.analysis_controller.get_crosstab(dimension, col_col)
+        result = self.analysis_controller.format_crosstab_result(crosstab, dimension)
         
         self.analysis_result_text.delete('1.0', tk.END)
         self.analysis_result_text.insert('1.0', result)
     
-    def show_correlation(self):
-        if self.current_data is None:
+    def _on_correlation(self) -> None:
+        if not self.analysis_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
             return
         
-        corr = self.data_analyzer.get_correlation_matrix()
+        corr = self.analysis_controller.get_correlation_matrix()
         
         if corr.empty:
-            messagebox.showwarning('警告', '没有数值型字段可用于相关性分析')
-            return
-        
-        result = f'相关性矩阵\n{"="*40}\n\n'
-        result += corr.to_string()
+            result = "没有足够的数值列进行相关性分析"
+        else:
+            result = "相关性矩阵:\n" + "="*40 + "\n\n"
+            result += corr.to_string()
         
         self.analysis_result_text.delete('1.0', tk.END)
         self.analysis_result_text.insert('1.0', result)
     
-    def show_analysis(self):
+    def _on_execute_analysis(self) -> None:
+        self._on_descriptive_stats()
+    
+    def _on_analysis_tab(self) -> None:
         self.notebook.select(self.analysis_frame)
-        self.show_descriptive_stats()
     
-    def execute_analysis(self):
-        dimension = self.dimension_var.get()
-        salary_col = self.salary_var.get() or 'pre_tax_salary'
-        
-        if not dimension:
-            messagebox.showwarning('警告', '请选择分析维度')
-            return
-        
-        comparison = self.data_analyzer.compare_by_dimension(dimension, salary_col)
-        
-        result = f'维度分析: {dimension}\n薪资字段: {salary_col}\n{"="*50}\n\n'
-        result += comparison.to_string(index=False)
-        
-        self.analysis_result_text.delete('1.0', tk.END)
-        self.analysis_result_text.insert('1.0', result)
-    
-    def show_visualization(self):
+    def _on_visualization_tab(self) -> None:
         self.notebook.select(self.visualization_frame)
     
-    def generate_chart(self):
-        if self.current_data is None:
+    def _on_generate_chart(self) -> None:
+        if not self.visualization_controller.has_data():
             messagebox.showwarning('警告', '请先加载数据')
             return
         
@@ -510,145 +428,42 @@ class SalaryAnalysisApp:
         dimension = self.viz_dimension_var.get()
         salary_col = self.salary_var.get() or 'pre_tax_salary'
         
-        # 只有部分图表类型需要分组维度
-        charts_requiring_dimension = ['bar', 'horizontal', 'pie', 'boxplot']
+        charts_requiring_dimension = ['bar', 'pie', 'boxplot']
         if chart_type in charts_requiring_dimension and not dimension:
             messagebox.showwarning('警告', '请选择分组维度')
             return
         
         try:
-            for widget in self.chart_frame.winfo_children():
-                widget.destroy()
-            
-            self.visualizer.create_figure(figsize=(10, 6))
+            figure = None
             
             if chart_type == 'bar':
-                grouped = self.current_data.groupby(dimension)[salary_col].mean().sort_values(ascending=False)
-                self.visualizer.create_bar_chart(
-                    x_data=grouped.index.tolist(),
-                    y_data=grouped.values.tolist(),
-                    title=f'{dimension} - 平均薪资对比',
-                    xlabel=dimension,
-                    ylabel='平均薪资'
-                )
-            
-            elif chart_type == 'horizontal':
-                grouped = self.current_data.groupby(dimension)[salary_col].mean().sort_values(ascending=False)
-                self.visualizer.create_bar_chart(
-                    x_data=grouped.index.tolist(),
-                    y_data=grouped.values.tolist(),
-                    title=f'{dimension} - 平均薪资对比',
-                    xlabel='平均薪资',
-                    ylabel=dimension,
-                    horizontal=True
-                )
-            
-            elif chart_type == 'pie':
-                grouped = self.current_data.groupby(dimension)[salary_col].sum().sort_values(ascending=False)
-                top_n = min(8, len(grouped))
-                grouped = grouped.head(top_n)
-                self.visualizer.create_pie_chart(
-                    data=grouped.values.tolist(),
-                    labels=grouped.index.tolist(),
-                    title=f'{dimension} - 薪资占比'
-                )
-            
+                figure = self.visualization_controller.create_bar_chart(dimension, salary_col)
             elif chart_type == 'line':
-                if 'join_year' in self.current_data.columns:
-                    trend = self.current_data.groupby('join_year')[salary_col].mean().reset_index()
-                    self.visualizer.create_line_chart(
-                        x_data=trend['join_year'].tolist(),
-                        y_data_list=[trend[salary_col].tolist()],
-                        title='薪资趋势变化',
-                        xlabel='年份',
-                        ylabel='平均薪资'
-                    )
+                if 'join_year' in self.data_manager.get_column_names():
+                    figure = self.visualization_controller.create_line_chart('join_year', salary_col)
                 else:
                     messagebox.showwarning('警告', '数据中没有时间字段')
                     return
-            
+            elif chart_type == 'pie':
+                figure = self.visualization_controller.create_pie_chart(dimension, salary_col)
             elif chart_type == 'scatter':
-                if 'work_years' in self.current_data.columns:
-                    valid_data = self.current_data[['work_years', salary_col]].dropna()
-                    self.visualizer.create_scatter_chart(
-                        x_data=valid_data['work_years'].tolist(),
-                        y_data=valid_data[salary_col].tolist(),
-                        title='工作年限与薪资关系',
-                        xlabel='工作年限',
-                        ylabel='薪资'
-                    )
+                if 'work_years' in self.data_manager.get_column_names():
+                    figure = self.visualization_controller.create_scatter_chart('work_years', salary_col)
                 else:
                     messagebox.showwarning('警告', '数据中没有工作年限字段')
                     return
-            
             elif chart_type == 'boxplot':
-                box_data = {}
-                for cat in self.current_data[dimension].unique():
-                    values = self.current_data[self.current_data[dimension] == cat][salary_col].dropna().values
-                    if len(values) > 0:
-                        box_data[str(cat)] = values
-                
-                if box_data:
-                    self.visualizer.create_boxplot(
-                        data_dict=box_data,
-                        title=f'{dimension} - 薪资分布',
-                        xlabel=dimension,
-                        ylabel='薪资'
-                    )
-            
+                figure = self.visualization_controller.create_boxplot(dimension, salary_col)
             elif chart_type == 'histogram':
-                salary_data = self.current_data[salary_col].dropna().values
-                self.visualizer.create_histogram(
-                    data=salary_data,
-                    bins=20,
-                    title='薪资分布直方图',
-                    xlabel='薪资'
-                )
+                figure = self.visualization_controller.create_histogram(salary_col, bins=20)
             
-            self.visualizer.embed_in_tkinter(self.chart_frame)
+            if figure:
+                self.visualization_controller.embed_chart(self.chart_frame, figure)
             
         except Exception as e:
             messagebox.showerror('错误', f'图表生成失败: {str(e)}')
     
-    def export_data(self):
-        if self.current_data is None:
-            messagebox.showwarning('警告', '没有可导出的数据')
-            return
-        
-        file_path = filedialog.asksaveasfilename(
-            defaultextension='.xlsx',
-            filetypes=[('Excel文件', '*.xlsx'), ('CSV文件', '*.csv')]
-        )
-        
-        if file_path:
-            try:
-                if file_path.endswith('.csv'):
-                    self.current_data.to_csv(file_path, index=False, encoding='utf-8-sig')
-                else:
-                    self.current_data.to_excel(file_path, index=False)
-                messagebox.showinfo('成功', f'数据已导出到:\n{file_path}')
-            except Exception as e:
-                messagebox.showerror('错误', f'导出失败: {str(e)}')
-    
-    def export_chart(self):
-        if self.visualizer.figure is None:
-            messagebox.showwarning('警告', '没有可导出的图表')
-            return
-        
-        file_path = filedialog.asksaveasfilename(
-            defaultextension='.png',
-            filetypes=[('PNG图片', '*.png'), ('JPG图片', '*.jpg'), ('PDF文档', '*.pdf')]
-        )
-        
-        if file_path:
-            try:
-                fmt = file_path.split('.')[-1]
-                self.visualizer.save_chart(file_path, format=fmt)
-                messagebox.showinfo('成功', f'图表已保存到:\n{file_path}')
-            except Exception as e:
-                messagebox.showerror('错误', f'保存失败: {str(e)}')
-    
-    def show_help(self):
+    def _show_help(self) -> None:
         help_text = '''
 数据导入:
   - 支持打开单个Excel文件或整个文件夹
@@ -671,8 +486,8 @@ class SalaryAnalysisApp:
 '''
         messagebox.showinfo('使用说明', help_text)
     
-    def show_about(self):
-        messagebox.showinfo('关于', '园区白领薪资数据分析工具\n\n版本: 1.0.0\n\n基于 Python + Pandas + Matplotlib 构建')
+    def _show_about(self) -> None:
+        messagebox.showinfo('关于', f'{self.config.get("app.name")}\n\n版本: {self.config.get("app.version")}\n\n基于 Python + Pandas + Matplotlib 构建')
 
 
 def main():
@@ -683,7 +498,7 @@ def main():
     except:
         pass
     
-    app = SalaryAnalysisApp(root)
+    app = MainWindow(root)
     root.mainloop()
 
 
