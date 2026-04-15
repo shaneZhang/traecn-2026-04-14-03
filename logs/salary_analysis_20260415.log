@@ -1,0 +1,11 @@
+2026-04-15 11:35:26,854 - ProcessingService - INFO - 创建了年龄分组字段: age_group
+2026-04-15 11:35:26,856 - ProcessingService - INFO - 创建了薪资分组字段: salary_group
+2026-04-15 11:35:26,859 - ProcessingService - INFO - 创建了工作年限分组字段: experience_group
+2026-04-15 11:40:49,594 - ProcessingService - INFO - 创建了年龄分组字段: age_group
+2026-04-15 11:40:49,597 - ProcessingService - INFO - 创建了薪资分组字段: salary_group
+2026-04-15 11:40:49,602 - ProcessingService - INFO - 创建了工作年限分组字段: experience_group
+2026-04-15 11:46:36,395 - ProcessingService - INFO - 创建了年龄分组字段: age_group
+2026-04-15 11:46:36,399 - ProcessingService - INFO - 创建了薪资分组字段: salary_group
+2026-04-15 11:46:36,404 - ProcessingService - INFO - 创建了工作年限分组字段: experience_group
+2026-04-15 11:48:58,077 - DataService - INFO - 成功加载文件: /Users/zhangyuqing/Desktop/traecn-2026-04-14-03/sample_data/薪资数据样本.xlsx, 共 500 条记录
+2026-04-15 11:49:01,436 - ProcessingService - INFO - 删除了 0 条含缺失值记录
