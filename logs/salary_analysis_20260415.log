@@ -1,0 +1,9 @@
+2026-04-15 11:10:02 - SalaryAnalysis - INFO - 删除了 2 条重复记录
+2026-04-15 11:10:02 - SalaryAnalysis - INFO - 完成 pre_tax_salary 的描述性统计分析
+2026-04-15 11:12:38 - SalaryAnalysis - INFO - 应用控制器初始化完成
+2026-04-15 11:12:55 - SalaryAnalysis - INFO - 开始加载文件: /Users/zhangyuqing/Desktop/traecn-2026-04-14-03/sample_data/薪资数据样本.xlsx
+2026-04-15 11:12:56 - SalaryAnalysis - INFO - 数据加载成功，共 500 条记录
+2026-04-15 11:13:04 - SalaryAnalysis - INFO - 完成 education 维度的薪资对比分析
+2026-04-15 11:13:07 - SalaryAnalysis - INFO - 完成 education 维度的薪资对比分析
+2026-04-15 11:13:10 - SalaryAnalysis - INFO - 生成柱状图: education vs base_salary
+2026-04-15 11:13:17 - SalaryAnalysis - INFO - 完成 education vs gender 的交叉分析
